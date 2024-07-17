@@ -16,17 +16,25 @@ cfg["tied_weights"] = False
 cfg["input_unit_norm"] = True
 cfg["perf_log_freq"] = 1000
 cfg["wandb_project"] = "batch_topk_sweep"
-cfg["top_k"] = 16
-cfg["sae_type"] = "topk"
+cfg["top_k"] = 32
+cfg["sae_type"] = "batchtopk"
 cfg["dict_size"] = 768 * 16
 cfg = post_init_cfg(cfg)
 
-if cfg["sae_type"] == "topk":
-    sae = TopKSAE(cfg)
-elif cfg["sae_type"] == "batchtopk":
-    sae = BatchTopKSAE(cfg)
+saes = []
+cfgs = []
+
+for sae_type in ["topk", "batchtopk"]:
+    if sae_type == "topk":
+        cfg["sae_type"] = sae_type
+        sae = TopKSAE(cfg)
+    elif sae_type == "batchtopk":
+        cfg["sae_type"] = sae_type
+        sae = BatchTopKSAE(cfg)
+    saes.append(sae)
+    cfgs.append(copy.deepcopy(cfg))
         
 model = HookedTransformer.from_pretrained(cfg["model_name"]).to(cfg["dtype"]).to(cfg["device"])
 activations_store = ActivationsStore(model, cfg)
-train_sae(sae, activations_store, model, cfg)
+train_sae_group(saes, activations_store, model, cfgs)
 # %%
