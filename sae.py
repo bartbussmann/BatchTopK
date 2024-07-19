@@ -61,20 +61,20 @@ class BatchTopKSAE(BaseAutoencoder):
         x_reconstruct = acts_topk @ self.W_dec + self.b_dec
 
         self.update_inactive_features(acts_topk)
-        output = self.get_loss_dict(x, x_reconstruct, acts_topk, x_mean, x_std)
+        output = self.get_loss_dict(x, x_reconstruct, acts, acts_topk, x_mean, x_std)
         return output
 
-    def get_loss_dict(self, x, x_reconstruct, acts, x_mean, x_std):
+    def get_loss_dict(self, x, x_reconstruct, acts, acts_topk, x_mean, x_std):
         l2_loss = (x_reconstruct.float() - x.float()).pow(2).mean()
-        l1_norm = acts.float().abs().sum(-1).mean()
+        l1_norm = acts_topk.float().abs().sum(-1).mean()
         l1_loss = self.cfg["l1_coeff"] * l1_norm
-        l0_norm = (acts > 0).float().sum(-1).mean()
+        l0_norm = (acts_topk > 0).float().sum(-1).mean()
         aux_loss = self.get_auxiliary_loss(x, x_reconstruct, acts)
         loss = l2_loss + l1_loss + aux_loss
         num_dead_features = (self.num_batches_not_active > self.cfg["n_batches_to_dead"]).sum()
         sae_out = self.postprocess_output(x_reconstruct, x_mean, x_std)
         output = {"sae_out": sae_out, 
-                  "feature_acts": acts,
+                  "feature_acts": acts_topk,
                   "num_dead_features": num_dead_features,
                   "loss": loss, 
                   "l1_loss": l1_loss, 
@@ -90,7 +90,7 @@ class BatchTopKSAE(BaseAutoencoder):
             residual = x.float() - x_reconstruct.float()
             acts_topk_aux = torch.topk(acts[:, dead_features], min(self.cfg["top_k_aux"], dead_features.sum()), dim=-1)
             acts_aux = torch.zeros_like(acts[:, dead_features]).scatter(-1, acts_topk_aux.indices, acts_topk_aux.values)
-            x_reconstruct_aux = acts_aux @ self.W_dec[dead_features] + self.b_dec
+            x_reconstruct_aux = acts_aux @ self.W_dec[dead_features] 
             l2_loss_aux = self.cfg["aux_penalty"] * (x_reconstruct_aux.float() - residual.float()).pow(2).mean()
             return l2_loss_aux
         else:
@@ -111,20 +111,20 @@ class TopKSAE(BaseAutoencoder):
         x_reconstruct = acts_topk @ self.W_dec + self.b_dec
 
         self.update_inactive_features(acts_topk)
-        output = self.get_loss_dict(x, x_reconstruct, acts_topk, x_mean, x_std)
+        output = self.get_loss_dict(x, x_reconstruct, acts, acts_topk, x_mean, x_std)
         return output
 
-    def get_loss_dict(self, x, x_reconstruct, acts, x_mean, x_std):
+    def get_loss_dict(self, x, x_reconstruct, acts, acts_topk, x_mean, x_std):
         l2_loss = (x_reconstruct.float() - x.float()).pow(2).mean()
-        l1_norm = acts.float().abs().sum(-1).mean()
+        l1_norm = acts_topk.float().abs().sum(-1).mean()
         l1_loss = self.cfg["l1_coeff"] * l1_norm
-        l0_norm = (acts > 0).float().sum(-1).mean()
+        l0_norm = (acts_topk > 0).float().sum(-1).mean()
         aux_loss = self.get_auxiliary_loss(x, x_reconstruct, acts)
         loss = l2_loss + l1_loss + aux_loss
         num_dead_features = (self.num_batches_not_active > self.cfg["n_batches_to_dead"]).sum()
         sae_out = self.postprocess_output(x_reconstruct, x_mean, x_std)
         output = {"sae_out": sae_out, 
-                  "feature_acts": acts,
+                  "feature_acts": acts_topk,
                   "num_dead_features": num_dead_features,
                   "loss": loss, 
                   "l1_loss": l1_loss, 
@@ -140,12 +140,11 @@ class TopKSAE(BaseAutoencoder):
             residual = x.float() - x_reconstruct.float()
             acts_topk_aux = torch.topk(acts[:, dead_features], min(self.cfg["top_k_aux"], dead_features.sum()), dim=-1)
             acts_aux = torch.zeros_like(acts[:, dead_features]).scatter(-1, acts_topk_aux.indices, acts_topk_aux.values)
-            x_reconstruct_aux = acts_aux @ self.W_dec[dead_features] + self.b_dec
+            x_reconstruct_aux = acts_aux @ self.W_dec[dead_features]
             l2_loss_aux = self.cfg["aux_penalty"] * (x_reconstruct_aux.float() - residual.float()).pow(2).mean()
             return l2_loss_aux
         else:
             return torch.tensor(0, dtype=x.dtype, device=x.device)
-
 
 class VanillaSAE(BaseAutoencoder):
     def __init__(self, cfg):
@@ -178,6 +177,3 @@ class VanillaSAE(BaseAutoencoder):
                   "l0_norm": l0_norm, 
                   "l1_norm": l1_norm}
         return output
-
-
-
