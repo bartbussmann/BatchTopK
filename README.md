@@ -20,5 +20,4 @@ python main.py
 ```
 
 ## Acknowledgments
-
-This project is a stripped-down version of [SAELens](https://github.com/jbloomAus/SAELens). We express our gratitude to the SAELens team for their foundational work in this area.
+The training code is heavily inspired and basically a stripped-down version of [SAELens](https://github.com/jbloomAus/SAELens). Thanks to the SAELens team for their foundational work in this area!
