@@ -5,9 +5,9 @@ def get_default_cfg():
     default_cfg = {
         "seed": 49,
         "batch_size": 4096,
-        "lr": 1e-4,
-        "num_tokens": int(5e8),
-        "l1_coeff": 1e-2,
+        "lr": 3e-4,
+        "num_tokens": int(1e9),
+        "l1_coeff": 0,
         "beta1": 0.9,
         "beta2": 0.99,
         "max_grad_norm": 100000,
@@ -17,33 +17,22 @@ def get_default_cfg():
         "site": "resid_pre",
         "layer": 8,
         "act_size": 768,
-        "dict_size": 4096,
+        "dict_size": 12288,
         "device": "cuda:0",
         "model_batch_size": 512,
         "num_batches_in_buffer": 10,
         "dataset_path": "Skylion007/openwebtext",
-        "l1_warmup_frac": 0.01,
         "wandb_project": "sparse_autoencoders",
-        "activation": "relu",
-        "tied_weights": False,
-        "input_unit_norm": False,
-        "perf_log_freq": 100,
+        "input_unit_norm": True,
+        "perf_log_freq": 1000,
         "sae_type": "topk",
         "checkpoint_freq": 10000,
-
-        # TopKSAE specific
-        "top_k": 50,
-        "top_k_aux": 512,
-        "aux_penalty": (1/32),
         "n_batches_to_dead": 5,
 
-        # MaxPoolSAE specific
-        "pool_size": 4,
-        "softmax_aux_penalty": 0,
-
-        # Quantile specific
-        "quantile": 0.99,
-        "quantile_lr": 1e-3,
+        # (Batch)TopKSAE specific
+        "top_k": 32,
+        "top_k_aux": 512,
+        "aux_penalty": (1/32)
     }
     default_cfg = post_init_cfg(default_cfg)
     return default_cfg

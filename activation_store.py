@@ -13,7 +13,7 @@ class ActivationsStore:
         self.model = model
         self.dataset = iter(load_dataset(cfg["dataset_path"], split="train", streaming=True))
         self.hook_point = cfg["hook_point"]
-        self.context_size = min(cfg["seq_len"], model.cfg.n_ctx)  # Use the smaller of cfg seq_len or model's max length
+        self.context_size = min(cfg["seq_len"], model.cfg.n_ctx)
         self.model_batch_size = cfg["model_batch_size"]
         self.device = cfg["device"]
         self.num_batches_in_buffer = cfg["num_batches_in_buffer"]
