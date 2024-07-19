@@ -6,7 +6,7 @@ from config import get_default_cfg, post_init_cfg
 from transformer_lens import HookedTransformer
 
 cfg = get_default_cfg()
-cfg["sae_type"] = "topk" # "vanilla", "topk", "batchtopk"
+cfg["sae_type"] = "batchtopk" # "vanilla", "topk", "batchtopk"
 cfg["model_name"] = "gpt2-small"
 cfg["layer"] = 8
 cfg["site"] = "resid_pre"
