@@ -1,4 +1,4 @@
-#BatchTopK Sparse Autoencoders
+# BatchTopK Sparse Autoencoders
 
 BatchTopK is a novel approach to Sparse Autoencoders (SAEs) that offers an alternative to TopK SAEs as introduced by OpenAI. This repository contains the implementation and experiments for BatchTopK SAEs, as described in our preliminary findings.
 
