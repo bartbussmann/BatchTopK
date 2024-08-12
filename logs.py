@@ -5,7 +5,7 @@ import os
 import json
 
 def init_wandb(cfg):
-    return wandb.init(project=cfg["wandb_project"], name=cfg["name"], config=cfg, reinit=True)
+    return wandb.init(project=cfg["wandb_project"], name=cfg["name"], config=cfg, reinit=True, mode='disabled')
 
 def log_wandb(output, step, wandb_run, index=None):
     metrics_to_log = ["loss", "l2_loss", "l1_loss", "l0_norm", "l1_norm", "aux_loss", "num_dead_features"]
