@@ -34,12 +34,12 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
-fig, axs = plt.subplots(2, 2, figsize=(15, 15))
+fig, axs = plt.subplots(2, 2, figsize=(12, 8))
 
 # Plot 1: Normalized MSE vs Dictionary size (k=32)
 for sae_type in ['batchtopk', 'topk']:
     data = df[(df['config_sae_type'] == sae_type) & (df['k'] == 32.)]
-    print(data)
+    data = data.sort_values(by='dictionary_size')
     axs[0, 0].plot(data['dictionary_size'], data['normalized_mse'], 
                    marker='o', linestyle='--', label=f"{sae_type} (k=32)")
 
@@ -53,6 +53,7 @@ axs[0, 0].grid(True)
 # Plot 2: Normalized MSE vs k (Dict size = 12288)
 for sae_type in ['batchtopk', 'topk', 'jumprelu']:
     data = df[(df['config_sae_type'] == sae_type) & (df['dictionary_size'] == 12288)]
+    data = data.sort_values(by='dictionary_size')
     axs[0, 1].plot(data['l0_norm'], data['normalized_mse'], 
                    marker='o', linestyle='--', label=sae_type)
 
