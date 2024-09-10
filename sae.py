@@ -44,7 +44,7 @@ class BaseAutoencoder(nn.Module):
             return x, None, None
 
     def postprocess_output(self, x_reconstruct, x_mean, x_std):
-        if self.cfg.get("input_unit_norm", False):git
+        if self.cfg.get("input_unit_norm", False):
             x_reconstruct = x_reconstruct * x_std + x_mean
         return x_reconstruct
 
