@@ -44,7 +44,7 @@ class BaseAutoencoder(nn.Module):
             return x, None, None
 
     def postprocess_output(self, x_reconstruct, x_mean, x_std):
-        if self.cfg.get("input_unit_norm", False):
+        if self.cfg.get("input_unit_norm", False):git
             x_reconstruct = x_reconstruct * x_std + x_mean
         return x_reconstruct
 
@@ -66,17 +66,20 @@ class BatchTopKSAE(BaseAutoencoder):
     def __init__(self, cfg):
         super().__init__(cfg)
 
-    def forward(self, x):
+    def forward(self, x, threshold=None):
         x, x_mean, x_std = self.preprocess_input(x)
 
         x_cent = x - self.b_dec
         acts = F.relu(x_cent @ self.W_enc)
-        acts_topk = torch.topk(acts.flatten(), self.cfg["top_k"] * x.shape[0], dim=-1)
-        acts_topk = (
+        if threshold is not None:
+            acts_topk = (acts > threshold).float() * acts
+        else:
+            acts_topk = torch.topk(acts.flatten(), self.cfg["top_k"] * x.shape[0], dim=-1)
+            acts_topk = (
             torch.zeros_like(acts.flatten())
             .scatter(-1, acts_topk.indices, acts_topk.values)
             .reshape(acts.shape)
-        )
+            )
         x_reconstruct = acts_topk @ self.W_dec + self.b_dec
 
         self.update_inactive_features(acts_topk)
