@@ -102,3 +102,33 @@ def save_checkpoint(wandb_run, sae, cfg, step):
 
     print(f"Model and config saved as artifact at step {step}")
 
+
+def save_checkpoint_mp(sae, cfg, step):
+    """
+    Save checkpoint without requiring a wandb run object.
+    Creates an artifact but doesn't log it to wandb directly.
+    """
+    save_dir = f"checkpoints/{cfg['name']}_{step}"
+    os.makedirs(save_dir, exist_ok=True)
+
+    # Save model state
+    sae_path = os.path.join(save_dir, "sae.pt")
+    torch.save(sae.state_dict(), sae_path)
+
+    # Prepare config for JSON serialization
+    json_safe_cfg = {}
+    for key, value in cfg.items():
+        if isinstance(value, (int, float, str, bool, type(None))):
+            json_safe_cfg[key] = value
+        elif isinstance(value, (torch.dtype, type)):
+            json_safe_cfg[key] = str(value)
+        else:
+            json_safe_cfg[key] = str(value)
+
+    # Save config
+    config_path = os.path.join(save_dir, "config.json")
+    with open(config_path, "w") as f:
+        json.dump(json_safe_cfg, f, indent=4)
+
+    print(f"Model and config saved at step {step} in {save_dir}")
+    return save_dir, sae_path, config_path

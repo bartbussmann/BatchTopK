@@ -62,6 +62,132 @@ class BaseAutoencoder(nn.Module):
         self.num_batches_not_active[acts.sum(0) > 0] = 0
 
 
+class GlobalTopKSAE(BaseAutoencoder):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.register_buffer('threshold', torch.tensor([]))
+        self.register_buffer('aux_threshold', torch.tensor([]))
+
+    def init_thresholds(self, x):
+        x, x_mean, x_std = self.preprocess_input(x)
+        x_cent = x - self.b_dec
+        pre_acts = x_cent @ self.W_enc
+        acts = F.relu(pre_acts)
+
+        acts_topk = torch.topk(acts.flatten(), self.cfg["top_k"] * x.shape[0], dim=-1)
+        self.threshold = acts_topk.values.min()
+        self.aux_threshold = self.threshold * 0.01
+
+        print(f"Threshold: {self.threshold}, Aux Threshold: {self.aux_threshold}")
+
+        
+    def compute_activations(self, x):
+        x_cent = x - self.b_dec
+        pre_acts = x_cent @ self.W_enc
+        acts = F.relu(pre_acts)
+        acts_topk = torch.where(acts > self.threshold, acts, torch.zeros_like(acts))
+        return acts, acts_topk
+
+    def forward(self, x):
+        if self.threshold.numel() == 0:
+            self.init_thresholds(x)
+
+        x, x_mean, x_std = self.preprocess_input(x)
+        acts, acts_topk = self.compute_activations(x)
+        x_reconstruct = acts_topk @ self.W_dec + self.b_dec
+        self.update_threshold(acts_topk)
+        self.update_inactive_features(acts_topk)
+        output = self.get_loss_dict(x, x_reconstruct, acts, acts_topk, x_mean, x_std)
+
+        return output
+
+    def encode(self, x):
+        x, x_mean, x_std = self.preprocess_input(x)
+        self.x_mean = x_mean
+        self.x_std = x_std
+        acts, acts_topk = self.compute_activations(x)
+        return acts_topk
+    
+    def decode(self, acts_topk):
+        x_reconstruct = acts_topk @ self.W_dec + self.b_dec
+        return self.postprocess_output(x_reconstruct, self.x_mean, self.x_std)
+
+    def get_loss_dict(self, x, x_reconstruct, acts, acts_topk, x_mean, x_std):
+        l2_loss = (x_reconstruct.float() - x.float()).pow(2).mean()
+        l1_norm = acts_topk.float().abs().sum(-1).mean()
+        l1_loss = self.cfg["l1_coeff"] * l1_norm
+        l0_norm = (acts_topk > 0).float().sum(-1).mean()
+        aux_loss = self.get_auxiliary_loss(x, x_reconstruct, acts)
+        loss = l2_loss + l1_loss + aux_loss
+        
+        # Add fraction of variance explained
+        r2_score = 1 - l2_loss / x.var()
+        
+        num_dead_features = (
+            self.num_batches_not_active > self.cfg["n_batches_to_dead"]
+        ).sum()
+        sae_out = self.postprocess_output(x_reconstruct, x_mean, x_std)
+        output = {
+            "sae_out": sae_out,
+            "feature_acts": acts_topk,
+            "num_dead_features": num_dead_features,
+            "loss": loss,
+            "l1_loss": l1_loss,
+            "l2_loss": l2_loss,
+            "l0_norm": l0_norm,
+            "l1_norm": l1_norm,
+            "aux_loss": aux_loss,
+            "threshold": self.threshold,
+            "aux_threshold": self.aux_threshold,
+            "r2_score": r2_score,  # Add R² score
+        }
+        return output
+
+    def get_auxiliary_loss(self, x, x_reconstruct, acts):
+        dead_features = self.num_batches_not_active >= self.cfg["n_batches_to_dead"]
+        if dead_features.sum() > 0:
+            residual = (x.float() - x_reconstruct.float()).detach()
+            acts_aux = torch.where(
+                acts[:, dead_features] > self.aux_threshold, 
+                acts[:, dead_features], 
+                torch.zeros_like(acts[:, dead_features])
+            )
+            x_reconstruct_aux = acts_aux @ self.W_dec[dead_features]
+            l2_loss_aux = (
+                self.cfg["aux_penalty"]
+                * (x_reconstruct_aux.float() - residual.float()).pow(2).mean()
+            )
+            self.update_aux_threshold(acts_aux)
+            return l2_loss_aux
+        else:
+            return torch.tensor(0, dtype=x.dtype, device=x.device)
+        
+    @torch.no_grad()
+    def update_threshold(self, acts_topk, lr=0.001):
+        l0_norm = (acts_topk > 0).float().sum(-1).mean()
+        target_l0 = self.cfg["top_k"]
+
+        lr = lr*(l0_norm - target_l0).abs()
+        
+        if l0_norm > target_l0:
+            self.threshold = self.threshold * (1 + lr)
+        else:
+            self.threshold = self.threshold / (1 + lr)
+            
+    @torch.no_grad()
+    def update_aux_threshold(self, acts_aux, lr=0.001, min_value=1e-6):
+        l0_norm_aux = (acts_aux > 0).float().sum(-1).mean()
+        target_l0_aux = self.cfg["top_k_aux"]
+
+        lr = lr*(l0_norm_aux - target_l0_aux).abs()
+
+        if l0_norm_aux > target_l0_aux:
+            self.aux_threshold = self.aux_threshold * (1 + lr)
+        else:
+            self.aux_threshold = self.aux_threshold / (1 + lr)
+
+        self.aux_threshold = max(self.aux_threshold, torch.tensor(min_value))
+
 class BatchTopKSAE(BaseAutoencoder):
     def __init__(self, cfg):
         super().__init__(cfg)
@@ -110,7 +236,7 @@ class BatchTopKSAE(BaseAutoencoder):
     def get_auxiliary_loss(self, x, x_reconstruct, acts):
         dead_features = self.num_batches_not_active >= self.cfg["n_batches_to_dead"]
         if dead_features.sum() > 0:
-            residual = x.float() - x_reconstruct.float()
+            residual = (x.float() - x_reconstruct.float()).detach()
             acts_topk_aux = torch.topk(
                 acts[:, dead_features],
                 min(self.cfg["top_k_aux"], dead_features.sum()),
@@ -175,7 +301,7 @@ class TopKSAE(BaseAutoencoder):
     def get_auxiliary_loss(self, x, x_reconstruct, acts):
         dead_features = self.num_batches_not_active >= self.cfg["n_batches_to_dead"]
         if dead_features.sum() > 0:
-            residual = x.float() - x_reconstruct.float()
+            residual = (x.float() - x_reconstruct.float()).detach()
             acts_topk_aux = torch.topk(
                 acts[:, dead_features],
                 min(self.cfg["top_k_aux"], dead_features.sum()),
